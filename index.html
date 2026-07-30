@@ -425,12 +425,24 @@ var qr=null,camOn=false;
 function toggleCam(){
   if(camOn){stopCam();return;}
   $('cam').classList.add('show');camOn=true;$('btnCam').textContent='✕';
-  qr=new Html5Qrcode('reader');
-  qr.start({facingMode:'environment'},{fps:12,qrbox:{width:250,height:140},
-      formatsToSupport:[Html5QrcodeSupportedFormats.CODE_128,Html5QrcodeSupportedFormats.CODE_39,
-        Html5QrcodeSupportedFormats.EAN_13,Html5QrcodeSupportedFormats.EAN_8,
-        Html5QrcodeSupportedFormats.ITF,Html5QrcodeSupportedFormats.UPC_A,
-        Html5QrcodeSupportedFormats.QR_CODE]},
+  qr=new Html5Qrcode('reader',{
+    formatsToSupport:[Html5QrcodeSupportedFormats.CODE_128,Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.EAN_13,Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.ITF,Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.CODABAR,Html5QrcodeSupportedFormats.QR_CODE],
+    experimentalFeatures:{useBarCodeDetectorIfSupported:true},
+    verbose:false});
+  // kotak scan besar & lebar (barcode memanjang) — ~92% lebar, ikut ukuran video
+  function qrbox(vw,vh){
+    var w=Math.round(Math.min(vw,vh*1.9)*0.92);
+    var h=Math.round(Math.min(w*0.55, vh*0.7));
+    return {width:w,height:h};
+  }
+  qr.start(
+    {facingMode:'environment',
+     width:{ideal:1920},height:{ideal:1080},
+     advanced:[{focusMode:'continuous'}]},
+    {fps:15,qrbox:qrbox,aspectRatio:1.777},
     function(txt){handleScan(txt);},
     function(){})
     .catch(function(e){toast('Kamera gagal: '+e);stopCam();});
