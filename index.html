@@ -195,12 +195,14 @@ var LS = {exec:'cc_exec', user:'cc_user', theme:'cc_theme', cache:'cc_cache_v1'}
 /* ============ state ============ */
 var ROWS = [];              // {row,item,code,status,petugas,waktu}
 var BYCODE = {};            // normCode -> array index di ROWS
+var BYNUM = {};             // kode tanpa nol depan -> kode asli (BYCODE key)
 var filter = 'all', q = '', cap = 60;
 var beepCtx = null;
 
 /* ============ util ============ */
 function $(id){return document.getElementById(id);}
 function normCode(s){return String(s==null?'':s).replace(/[^0-9A-Za-z]/g,'').toUpperCase();}
+function stripZeros(s){s=String(s||'');return /^[0-9]+$/.test(s)?(s.replace(/^0+/,'')||'0'):s;}
 function normKey(s){return String(s==null?'':s).trim().toLowerCase();}
 function isPicked(r){return normKey(r.status)==='picked';}
 function execUrl(){return (localStorage.getItem(LS.exec)||DEFAULT_EXEC||'').trim();}
@@ -228,10 +230,11 @@ function findCol(headers,name){
 
 /* ============ load data (gviz) ============ */
 function buildIndex(){
-  BYCODE={};
+  BYCODE={}; BYNUM={};
   for(var i=0;i<ROWS.length;i++){
     var c=ROWS[i].code; if(!c)continue;
     (BYCODE[c]=BYCODE[c]||[]).push(i);
+    var z=stripZeros(c); if(z && BYNUM[z]===undefined) BYNUM[z]=c; // kebal nol depan
   }
 }
 
@@ -328,13 +331,18 @@ function showResult(kind,big,item,sub){
 // Ambil kode yang cocok dari hasil scan. QR/label sering berisi URL atau teks
 // panjang (mis. https://…?code=1024908902) — jadi kita coba beberapa kandidat:
 // (1) seluruh string dinormalisasi, (2) tiap deretan angka, (3) tiap deretan alnum.
+// Pencocokan KEBAL NOL DEPAN: barcode fisik sering punya nol depan (01024908902)
+// sedangkan Google Sheet menyimpan sebagai angka → nol depan hilang (1024908902).
 function resolveCode(raw){
   var s=String(raw==null?'':raw);
   var cand=[normCode(s)];
   var m;
   var reNum=/[0-9]{4,}/g;        while((m=reNum.exec(s))) cand.push(m[0].toUpperCase());
   var reAl=/[0-9A-Za-z]{4,}/g;   while((m=reAl.exec(s))) cand.push(m[0].toUpperCase());
+  // 1) cocok persis
   for(var i=0;i<cand.length;i++){ if(cand[i] && BYCODE[cand[i]]) return cand[i]; }
+  // 2) cocok setelah nol depan diabaikan (kedua sisi)
+  for(var j=0;j<cand.length;j++){ var z=stripZeros(cand[j]); if(z && BYNUM[z]) return BYNUM[z]; }
   return cand[0]||''; // tak ada yang cocok → pakai kandidat pertama untuk pesan
 }
 
