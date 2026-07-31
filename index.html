@@ -62,7 +62,9 @@
   .camtools{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--card)}
   .cambtn{flex:0 0 auto;background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:8px 12px;font-size:14px;font-weight:700;cursor:pointer}
   .cambtn.on{background:var(--warn);color:#241c00;border-color:var(--warn)}
-  .camhint{font-size:11px;color:var(--mut);line-height:1.3}
+  .zoomwrap{flex:1;display:flex;align-items:center;gap:8px;font-size:15px}
+  .zoomwrap input[type=range]{flex:1;accent-color:var(--accent);height:26px}
+  .camhint{font-size:11px;color:var(--mut);line-height:1.35;padding:0 10px 8px;background:var(--card)}
 
   /* toolbar + list */
   .toolbar{display:flex;gap:8px;align-items:center;margin-bottom:8px}
@@ -128,8 +130,12 @@
     <div id="reader"></div>
     <div class="camtools">
       <button class="cambtn" id="btnTorch">🔦 Senter</button>
-      <span class="camhint">Dekatkan QR sampai memenuhi kotak, tahan stabil sebentar.</span>
+      <div class="zoomwrap" id="zoomWrap">
+        <span>🔍</span>
+        <input type="range" id="zoom" min="1" max="5" step="0.1" value="1">
+      </div>
     </div>
+    <div class="camhint" id="camHint">Jangan terlalu dekat — pegang HP ±20 cm lalu geser 🔍 zoom sampai QR memenuhi kotak & tajam.</div>
   </div>
 
   <div class="stats">
@@ -469,17 +475,35 @@ function toggleCam(){
        advanced:[{focusMode:'continuous'}]}},
     function(txt){handleScan(txt);},
     function(){})
-    .then(function(){ setupTorch(); })
+    .then(function(){ setTimeout(setupCamCtl,400); })
     .catch(function(e){toast('Kamera gagal: '+e);stopCam();});
 }
-var torchOn=false, torchOk=false;
-function setupTorch(){
-  torchOn=false; torchOk=false; $('btnTorch').classList.remove('on');
-  try{
-    var caps=qr.getRunningTrackCapabilities&&qr.getRunningTrackCapabilities();
-    torchOk=!!(caps&&caps.torch);
-  }catch(e){ torchOk=false; }
+var torchOn=false, torchOk=false, zoomOk=false;
+function setupCamCtl(){
+  torchOn=false; torchOk=false; zoomOk=false; $('btnTorch').classList.remove('on');
+  var caps=null;
+  try{ caps=qr.getRunningTrackCapabilities&&qr.getRunningTrackCapabilities(); }catch(e){}
+  // senter
+  torchOk=!!(caps&&caps.torch);
   $('btnTorch').style.display=torchOk?'':'none';
+  // zoom
+  var z=caps&&caps.zoom;
+  if(z && typeof z.max==='number' && z.max>1){
+    zoomOk=true;
+    var zi=$('zoom');
+    zi.min=z.min||1; zi.max=z.max; zi.step=z.step||0.1;
+    var start=Math.min(z.max, Math.max(z.min||1, 2)); // mulai ~2x
+    zi.value=start;
+    $('zoomWrap').style.display='';
+    applyZoom(start);
+  }else{
+    $('zoomWrap').style.display='none';
+    $('camHint').textContent='HP ini tak punya zoom digital kamera — dekatkan perlahan sampai QR tajam (jangan sampai buram), tahan stabil. Nyalakan 🔦 kalau kurang terang.';
+  }
+}
+function applyZoom(v){
+  if(!qr||!zoomOk||!qr.applyVideoConstraints)return;
+  qr.applyVideoConstraints({advanced:[{zoom:parseFloat(v)}]}).catch(function(){});
 }
 function toggleTorch(){
   if(!qr||!torchOk)return;
@@ -524,6 +548,7 @@ $('list').addEventListener('click',function(e){
 
 $('btnCam').addEventListener('click',toggleCam);
 $('btnTorch').addEventListener('click',toggleTorch);
+$('zoom').addEventListener('input',function(){applyZoom(this.value);});
 $('btnTheme').addEventListener('click',function(){
   var cur=document.documentElement.getAttribute('data-theme')==='light'?'dark':'light';
   document.documentElement.setAttribute('data-theme',cur);localStorage.setItem(LS.theme,cur);
